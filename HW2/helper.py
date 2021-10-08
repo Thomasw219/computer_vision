@@ -73,8 +73,9 @@ def get_image_feature(args):
     * feat: evaluated deep feature
     '''
     i, image_path, vgg16 = args
-    img_torch = io.imread(image_path)
+    image = io.imread(image_path)
     print(i)
+    print(image_path)
     
     '''
     HINTS:
@@ -89,6 +90,7 @@ def get_image_feature(args):
         vgg_feat_feat = vgg16.features(img_torch[None, ])
         vgg_feat_feat = vgg_classifier(vgg_feat_feat.flatten())
     feat = vgg_feat_feat.numpy()
+    print(feat)
     
     return [i,feat]
 
@@ -112,17 +114,31 @@ def build_recognition_system(vgg16, num_workers=2):
     2.> Keep track of the order in which input is given to multiprocessing
     '''
     # YOUR CODE HERE
-    start = 500
-    end = 1000
-    image_names = train_data['files'][start:end]
-    image_labels = train_data['labels'][start:end]
+    image_names = train_data['files']
+    image_labels = train_data['labels']
+
+    try:
+        features = np.load('trained_system_deep.npz')['features']
+        start = len(features)
+    except:
+        features = None
+        start = 0
+    labels = np.array(image_labels)
     
     # I tried multiprocessing but it would hang and I couldn't find a solution
     ordered_features = []
-    for i in range(image_names.shape[0]):
+    for i in range(start, image_names.shape[0]):
         full_image_name = './data/' + image_names[i]
         i, feat = get_image_feature([i, full_image_name, vgg16])
         ordered_features.append(feat.flatten())
+        if (i + 1) % 100 == 0:
+            print("Saving")
+            if features is None:
+                save_features = np.array(ordered_features)
+            else:
+                save_features = np.concatenate([features, np.array(ordered_features)])
+            np.savez('trained_system_deep.npz', features=save_features, labels=labels)
+            print(save_features.shape)
     
 
     '''
@@ -130,12 +146,8 @@ def build_recognition_system(vgg16, num_workers=2):
     1.> reorder the features to their correct place as input
     '''
     # YOUR CODE HERE
-    ordered_features = np.array(ordered_features)
-    labels = np.array(image_labels)
-        
-    print("done", ordered_features.shape)
+    print("done", save_features.shape)
     
-    np.savez('trained_system_deep{}-{}.npz'.format(start, end - 1), features=ordered_features, labels=labels)
 
 #build_recognition_system(vgg16, num_workers=1)
 
@@ -146,6 +158,8 @@ def helper_func(args):
     distances = scipy.spatial.distance.cdist(feature.reshape((1, -1)), trained_features).ravel()
     nearest_image_idx = np.argmin(distances)
     pred_label = train_labels[nearest_image_idx]
+    print("Pred label: {}".format(pred_label))
+    print("Min distance: {}".format(np.min(distances)))
     return [i, pred_label]
 
 
